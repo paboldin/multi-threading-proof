@@ -147,7 +147,8 @@ class Combinator(object):
 
         if len(states) != 1:
             print("Incorrect {} different states".format(len(states)))
-            print(states)
+            for state in states.values():
+                print(state)
 
         return states
 
@@ -160,23 +161,21 @@ class MyState(State):
 def init_func():
     return MyState()
 
-def first_func(state):
+def somecode(state):
     state.lock.take()
     state.value = 1
     yield
     state.value += 1
     state.lock.release()
 
-def second_func(state):
-    state.lock.take()
+def someothercode(state):
     val = state.value
     yield
     state.value = val + 1
-    state.lock.release()
 
 
 def main():
-    combinator = Combinator(init_func, [first_func, second_func])
+    combinator = Combinator(init_func, [somecode, someothercode])
     combinator.check()
 
 if __name__ == '__main__':
