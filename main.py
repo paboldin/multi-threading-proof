@@ -21,7 +21,9 @@ class State(object):
         return hash(tuple(getattr(self, x) for x in self._state))
 
     def __repr__(self):
-        return repr(self.__dict__)
+        d = dict(self.__dict__)
+        d.pop('_state', None)
+        return repr(d)
 
 class TooMuchCombinations(Exception):
     pass
@@ -113,8 +115,14 @@ class Combinator(object):
         states = self.run()
         states = sorted(states, key=hash)
         grouped_by = itertools.groupby(states, key=hash)
-        for key, values in grouped_by:
-            print(key, list(values))
+
+        states = dict((key, list(values)) for key, values in grouped_by)
+
+        if len(states) != 1:
+            print("Incorrect")
+            print(states)
+
+        return states
 
 
 class MyState(State):
