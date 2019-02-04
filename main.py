@@ -8,11 +8,26 @@
 
 import itertools
 
+class Lock(object):
+    taken = 0
+    def take(self):
+        if self.taken:
+            raise StopIteration()
+        self.taken = 1
+    def release(self):
+        self.taken = 0
+
 class State(object):
     INIT_STATE = {}
     def __init__(self):
-        self.__dict__.update(self.INIT_STATE)
-        self._state = list(self.INIT_STATE)
+        self._state = []
+        for k, v in self.INIT_STATE.items():
+            if v is Lock:
+                v = v()
+            else:
+                self._state.append(k)
+            setattr(self, k, v)
+        self._state = tuple(self._state)
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__ 
@@ -21,8 +36,9 @@ class State(object):
         return hash(tuple(getattr(self, x) for x in self._state))
 
     def __repr__(self):
-        d = dict(self.__dict__)
-        d.pop('_state', None)
+        d = {}
+        for s in self._state + ('path',):
+            d[s] = getattr(self, s)
         return repr(d)
 
 class TooMuchCombinations(Exception):
@@ -100,12 +116,23 @@ class Combinator(object):
             state = self.init_func()
             generators = self._generators(state)
             path = [step[0] for step in path]
+
+            followed_through = True
+
             for step in path:
                 idx = step
+
+                if generators[idx] is None:
+                    followed_through = False
+                    break
+
                 try:
                     next(generators[idx])
                 except StopIteration:
                     generators[idx] = None
+
+            if not followed_through:
+                continue
             state.path = path
             states.append(state)
 
@@ -119,39 +146,37 @@ class Combinator(object):
         states = dict((key, list(values)) for key, values in grouped_by)
 
         if len(states) != 1:
-            print("Incorrect")
+            print("Incorrect {} different states".format(len(states)))
             print(states)
 
         return states
 
-
 class MyState(State):
     INIT_STATE = {
-        'value': 0
+        'value': 0,
+        'lock': Lock
     }
 
 def init_func():
     return MyState()
 
 def first_func(state):
+    state.lock.take()
     state.value = 1
     yield
     state.value += 1
+    state.lock.release()
 
 def second_func(state):
+    state.lock.take()
     val = state.value
     yield
     state.value = val + 1
+    state.lock.release()
 
 
-
-
-THREADS = [
-        first_func,
-        second_func
-]
 def main():
-    combinator = Combinator(init_func, THREADS)
+    combinator = Combinator(init_func, [first_func, second_func])
     combinator.check()
 
 if __name__ == '__main__':
