@@ -6,7 +6,11 @@
 # if scheduler sees that `take` was successful -- immediately restore to the
 # yield, otherwise continue until it is there
 
+import copy
+import functools
 import itertools
+
+import pprint
 
 class Lock(object):
     taken = 0
@@ -26,14 +30,26 @@ class State(object):
                 v = v()
             else:
                 self._state.append(k)
-            setattr(self, k, v)
+            setattr(self, k, copy.deepcopy(v))
         self._state = tuple(self._state)
 
     def __eq__(self, other):
         return self.__dict__ == other.__dict__ 
 
     def __hash__(self):
-        return hash(tuple(getattr(self, x) for x in self._state))
+
+        def convert_to_tuple(x):
+            if isinstance(x, list):
+                return tuple(x)
+            if isinstance(x, dict):
+                return tuple(x.items())
+            return x
+
+        return hash(
+                tuple(
+                        convert_to_tuple(getattr(self, x)) for x in self._state
+                    )
+                )
 
     def __repr__(self):
         d = {}
@@ -148,34 +164,50 @@ class Combinator(object):
         if len(states) != 1:
             print("Incorrect {} different states".format(len(states)))
             for state in states.values():
-                print(state)
+                pprint.pprint(state)
 
         return states
 
 class MyState(State):
     INIT_STATE = {
-        'value': 0,
-        'lock': Lock
+        'get': 0,
+        'put': 1,
+        'N': 1,
+        'Np1': 2,
+        'indexes': [0, -1],
+        'retval': {}
     }
 
 def init_func():
     return MyState()
 
-def somecode(state):
-    state.lock.take()
-    state.value = 1
-    yield
-    state.value += 1
-    state.lock.release()
+def alloc(state, i):
+    state.retval[i] = -1
 
-def someothercode(state):
-    val = state.value
+    get_raw = state.get
+    get = get_raw % state.Np1
+    state.get += 1
     yield
-    state.value = val + 1
 
+    if get == state.put % state.Np1:
+        state.get -= 1
+    else:
+        state.retval[i] = state.indexes[get]
+        yield
+
+        if state.retval[i] == -1:
+            state.get -= 1
+        else:
+            #if get_raw == state.Np1:
+                #state.get -= state.Np1
+            # yield
+            state.indexes[get] = -1
+
+def allocn(i):
+    return functools.partial(alloc, i=i)
 
 def main():
-    combinator = Combinator(init_func, [somecode, someothercode])
+    combinator = Combinator(init_func, [allocn(0), allocn(1), allocn(2)])
     combinator.check()
 
 if __name__ == '__main__':
