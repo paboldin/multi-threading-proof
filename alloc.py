@@ -29,6 +29,7 @@ def alloc(state, i):
         state.get -= 1
     else:
         state.retval[i] = state.indexes[get]
+        # state.indexes[get] = -1 # uncomment this to remove double-allocation
         yield
 
         if state.retval[i] == -1:
